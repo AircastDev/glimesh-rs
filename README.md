@@ -19,7 +19,7 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 More examples can be found in the `examples/` directory.
 
 ```rust
-use glimesh::{http::Connection, Auth};
+use glimesh::{http::Connection, Auth, Error};
 use graphql_client::GraphQLQuery;
 use std::env;
 
@@ -32,7 +32,7 @@ use std::env;
 pub struct UserDetailsQuery;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
 
     let auth = Auth::client_id(client_id);
@@ -45,11 +45,12 @@ async fn main() {
                 username: "James".into(),
             }
         )
-        .await
-        .unwrap();
+        .await?;
 
-    let user = res.user.unwrap();
+    let user = res.user;
     println!("User details: {:#?}", user);
+
+    Ok(())
 }
 ```
 
