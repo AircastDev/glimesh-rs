@@ -18,7 +18,7 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 
 More examples can be found in the `examples/` directory.
 
-```rs
+```rust
 use glimesh::{http::Connection, Auth};
 use graphql_client::GraphQLQuery;
 use std::env;
