@@ -208,7 +208,7 @@ impl RefreshableAccessToken {
         }
 
         if let Err(err) = self.token_sender.send(new_token.clone()) {
-            // TODO: log warning or something?
+            tracing::warn!(?err, "failed to send refresh access token to receiver");
         }
 
         Ok(new_token)
