@@ -5,6 +5,7 @@
 //! - Queries
 //! - Mutations
 //! - Http based connection
+//! - Automatic access token refreshing
 //!
 //! ## Example
 //!

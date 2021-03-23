@@ -9,6 +9,7 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 -   [x] Queries
 -   [x] Mutations
 -   [x] Http based connection
+-   [x] Automatic access token refreshing
 -   [ ] Subscriptions
 -   [ ] Websocket based connection
 -   [ ] Reconnect and resubscribe to subscriptions on socket failure
