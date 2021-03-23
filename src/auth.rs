@@ -52,6 +52,7 @@ impl Auth {
     pub fn refreshable_access_token(
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
+        redirect_uri: impl Into<String>,
         access_token: AccessToken,
     ) -> Self {
         let http = reqwest::Client::builder()
@@ -63,6 +64,7 @@ impl Auth {
             client: ClientConfig {
                 client_id: client_id.into(),
                 client_secret: client_secret.into(),
+                redirect_uri: Some(redirect_uri.into()),
             },
             access_token: Arc::new(RwLock::new(access_token)),
             http,
@@ -88,6 +90,7 @@ impl Auth {
             client: ClientConfig {
                 client_id: client_id.into(),
                 client_secret: client_secret.into(),
+                redirect_uri: None,
             },
             access_token: Default::default(),
             http,
@@ -124,6 +127,9 @@ pub struct ClientConfig {
 
     /// Glimesh client secret, used to obtain an access token
     pub client_secret: String,
+
+    /// The same redirect uri that the token was obtained with. Can be None for client_credentials.
+    pub redirect_uri: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,13 +142,55 @@ pub struct RefreshableAccessToken {
 impl RefreshableAccessToken {
     /// Refresh the access token using the refresh token
     pub async fn refresh(&self) -> Result<AccessToken, Error> {
-        todo!()
+        let refresh_token = self
+            .access_token
+            .read()
+            .refresh_token
+            .clone()
+            .ok_or(Error::MissingRefreshToken)?;
+        let res = self
+            .http
+            .post("https://glimesh.tv/api/oauth/token")
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("client_id", &self.client.client_id),
+                ("client_secret", &self.client.client_secret),
+                (
+                    "redirect_uri",
+                    self.client
+                        .redirect_uri
+                        .as_ref()
+                        .ok_or(Error::MissingRedirect)?,
+                ),
+                ("refresh_token", &refresh_token),
+            ])
+            .send()
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if !res.status().is_success() {
+            return Err(Error::BadStatus(res.status().as_u16()));
+        }
+
+        let new_token: AccessToken = res.json().await.map_err(anyhow::Error::from)?;
+
+        {
+            let mut access_token = self.access_token.write();
+            *access_token = new_token.clone();
+        }
+
+        Ok(new_token)
     }
 
-    /// Obtain an access token, will refresh the token if required.
+    /// Obtain an access token, will refresh the token if near expiry.
     pub async fn access_token(&self) -> Result<AccessToken, Error> {
-        // TODO: refresh if near expiry
-        Ok(self.access_token.read().clone())
+        let token = self.access_token.read().clone();
+        let expires_at = token.created_at + Duration::seconds(token.expires_in);
+        if (expires_at - Duration::seconds(EXPIRY_BUFFER)) > Utc::now() {
+            Ok(token)
+        } else {
+            self.refresh().await
+        }
     }
 }
 
@@ -182,7 +230,7 @@ impl ClientCredentials {
         Ok(new_token)
     }
 
-    /// Obtain an access token, will refresh the token if required.
+    /// Obtain an access token, will refresh the token if near expiry.
     pub async fn access_token(&self) -> Result<AccessToken, Error> {
         let access_token = self.access_token.read().clone();
         if let Some(token) = access_token {

@@ -5,6 +5,7 @@
 ### Added
 
 -   Support for client credentials authentication
+-   Token refreshing
 
 ### Breaking Changes
 

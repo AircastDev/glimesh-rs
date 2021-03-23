@@ -16,6 +16,14 @@ pub enum Error {
     #[error("{0} response from api")]
     BadStatus(u16),
 
+    /// Attempted to refresh a token without having a redirect uri specified on the client.
+    #[error("Missing redirect uri in client config")]
+    MissingRedirect,
+
+    /// Attempted to refresh a token but the refresh_token was None
+    #[error("Missing refresh token")]
+    MissingRefreshToken,
+
     /// Some other error occurred.
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),
