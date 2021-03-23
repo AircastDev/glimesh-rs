@@ -1,0 +1,6 @@
+query CurrentUserQuery {
+	myself {
+		id
+		displayname
+	}
+}

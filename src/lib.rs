@@ -17,8 +17,8 @@
 //! #
 //! #[derive(GraphQLQuery)]
 //! #[graphql(
-//!     schema_path = "examples/schema.json",
-//!     query_path = "examples/user_details.graphql",
+//!     schema_path = "examples/graphql/schema.json",
+//!     query_path = "examples/graphql/user_details.graphql",
 //!     response_derives = "Debug"
 //! )]
 //! pub struct UserDetailsQuery;
@@ -70,6 +70,7 @@ extern crate async_trait;
 mod auth;
 mod client;
 mod conn;
+mod entities;
 mod error;
 
 pub use auth::Auth;

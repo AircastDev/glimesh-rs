@@ -1,6 +1,6 @@
 # glimesh-rs
 
-![Crates.io](https://img.shields.io/crates/l/glimesh) ![Crates.io](https://img.shields.io/crates/v/glimesh)
+![Crates.io](https://img.shields.io/crates/l/glimesh) [![Crates.io](https://img.shields.io/crates/v/glimesh)](https://crates.io/crates/glimesh) [![Docs.rs](https://docs.rs/glimesh/badge.svg)](https://docs.rs/glimesh)
 
 A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client) for easier use with [Glimesh](https://glimesh.tv). This is currently a work in progress, and should be considered beta, but it is being used to power [Oaty](https://oaty.app) in production.
 
@@ -25,8 +25,8 @@ use std::env;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "examples/schema.json",
-    query_path = "examples/user_details.graphql",
+    schema_path = "examples/graphql/schema.json",
+    query_path = "examples/graphql/user_details.graphql",
     response_derives = "Debug"
 )]
 pub struct UserDetailsQuery;

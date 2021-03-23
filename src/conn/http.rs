@@ -130,7 +130,7 @@ impl Connection {
 
         let res = self
             .apply_auth(req)
-            .await
+            .await?
             .send()
             .await
             .map_err(anyhow::Error::from)?;
@@ -152,15 +152,19 @@ impl Connection {
         Ok(data)
     }
 
-    async fn apply_auth(&self, req: RequestBuilder) -> RequestBuilder {
+    async fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {
         match self.auth.as_ref() {
             Auth::ClientId(client_id) => {
-                req.header(header::AUTHORIZATION, format!("Client-ID {}", client_id))
+                Ok(req.header(header::AUTHORIZATION, format!("Client-ID {}", client_id)))
             }
-            Auth::AccessToken(access_token) => req.bearer_auth(access_token),
-            Auth::AccessTokenWithRefresh { access_token, .. } => {
-                // TODO: refresh token if required
-                req.bearer_auth(access_token)
+            Auth::AccessToken(access_token) => Ok(req.bearer_auth(access_token)),
+            Auth::RefreshableAccessToken(token) => {
+                let tokens = token.access_token().await?;
+                Ok(req.bearer_auth(tokens.access_token))
+            }
+            Auth::ClientCredentials(client_credentials) => {
+                let tokens = client_credentials.access_token().await?;
+                Ok(req.bearer_auth(tokens.access_token))
             }
         }
     }
