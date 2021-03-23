@@ -1,15 +1,15 @@
 use crate::Error;
 use chrono::{DateTime, Duration, Utc};
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::{watch, RwLock};
 
 const EXPIRY_BUFFER: i64 = 5 * 60;
 
 /// Authentication method.
 /// The Glimesh API requires an authentication method to be used.
 /// The most basic is the ClientId method, which gives you read only access to the api.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Auth {
     /// Use Client-ID authentication.
     /// When using this method, you can only 'read' from the API.
@@ -47,6 +47,26 @@ impl Auth {
     /// Use Bearer authentication.
     /// This will use the provided refresh token to refresh the access token when/if it expires.
     ///
+    /// You can listen for updates to the token using the [`tokio::sync::watch::Receiver`] returned as the second
+    /// part of the tuple.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// let (auth, token_receiver) = Auth::refreshable_access_token(
+    ///     "<client_id>",
+    ///     "<client_secret>",
+    ///     "<redirect_uri>",
+    ///     AccessToken { .. },
+    /// );
+    ///
+    /// tokio::spawn(async move {
+    ///     while token_receiver.changed().await.is_ok() {
+    ///         println!("new token = {:#?}", *token_receiver.borrow());
+    ///     }
+    /// });
+    /// ```
+    ///
     /// # Panics
     /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load the system configuration.
     pub fn refreshable_access_token(
@@ -54,21 +74,27 @@ impl Auth {
         client_secret: impl Into<String>,
         redirect_uri: impl Into<String>,
         access_token: AccessToken,
-    ) -> Self {
+    ) -> (Self, watch::Receiver<AccessToken>) {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("failed to create http client");
 
-        Self::RefreshableAccessToken(RefreshableAccessToken {
-            client: ClientConfig {
-                client_id: client_id.into(),
-                client_secret: client_secret.into(),
-                redirect_uri: Some(redirect_uri.into()),
-            },
-            access_token: Arc::new(RwLock::new(access_token)),
-            http,
-        })
+        let (token_sender, token_receiver) = watch::channel(access_token.clone());
+
+        (
+            Self::RefreshableAccessToken(RefreshableAccessToken {
+                client: ClientConfig {
+                    client_id: client_id.into(),
+                    client_secret: client_secret.into(),
+                    redirect_uri: Some(redirect_uri.into()),
+                },
+                access_token: Arc::new(RwLock::new(access_token)),
+                http,
+                token_sender,
+            }),
+            token_receiver,
+        )
     }
 
     /// Use Bearer authentication via the client_credentials flow.
@@ -132,11 +158,12 @@ pub struct ClientConfig {
     pub redirect_uri: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RefreshableAccessToken {
     client: ClientConfig,
     access_token: Arc<RwLock<AccessToken>>,
     http: reqwest::Client,
+    token_sender: watch::Sender<AccessToken>,
 }
 
 impl RefreshableAccessToken {
@@ -145,6 +172,7 @@ impl RefreshableAccessToken {
         let refresh_token = self
             .access_token
             .read()
+            .await
             .refresh_token
             .clone()
             .ok_or(Error::MissingRefreshToken)?;
@@ -175,8 +203,12 @@ impl RefreshableAccessToken {
         let new_token: AccessToken = res.json().await.map_err(anyhow::Error::from)?;
 
         {
-            let mut access_token = self.access_token.write();
+            let mut access_token = self.access_token.write().await;
             *access_token = new_token.clone();
+        }
+
+        if let Err(err) = self.token_sender.send(new_token.clone()) {
+            // TODO: log warning or something?
         }
 
         Ok(new_token)
@@ -184,7 +216,7 @@ impl RefreshableAccessToken {
 
     /// Obtain an access token, will refresh the token if near expiry.
     pub async fn access_token(&self) -> Result<AccessToken, Error> {
-        let token = self.access_token.read().clone();
+        let token = self.access_token.read().await.clone();
         let expires_at = token.created_at + Duration::seconds(token.expires_in);
         if (expires_at - Duration::seconds(EXPIRY_BUFFER)) > Utc::now() {
             Ok(token)
@@ -223,7 +255,7 @@ impl ClientCredentials {
         let new_token: AccessToken = res.json().await.map_err(anyhow::Error::from)?;
 
         {
-            let mut access_token = self.access_token.write();
+            let mut access_token = self.access_token.write().await;
             access_token.replace(new_token.clone());
         }
 
@@ -232,7 +264,7 @@ impl ClientCredentials {
 
     /// Obtain an access token, will refresh the token if near expiry.
     pub async fn access_token(&self) -> Result<AccessToken, Error> {
-        let access_token = self.access_token.read().clone();
+        let access_token = self.access_token.read().await.clone();
         if let Some(token) = access_token {
             let expires_at = token.created_at + Duration::seconds(token.expires_in);
             if (expires_at - Duration::seconds(EXPIRY_BUFFER)) > Utc::now() {
