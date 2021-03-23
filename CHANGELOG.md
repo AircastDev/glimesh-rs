@@ -4,7 +4,7 @@
 
 ### Added
 
--   Cient credentials authentication
+-   Client credentials authentication
 -   Access token refreshing
 
 ### Breaking Changes
