@@ -21,3 +21,35 @@ pub mod glimesh_date {
             .map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(feature = "websocket")]
+pub(crate) mod ws {
+    use serde::{de::DeserializeOwned, Deserialize, Serialize};
+    use serde_tuple::{Deserialize_tuple, Serialize_tuple};
+    use uuid::Uuid;
+
+    #[derive(Debug, Clone, Serialize_tuple)]
+    pub(crate) struct SendPhoenixMessage<T: Serialize> {
+        pub(crate) join_ref: Uuid,
+        pub(crate) msg_ref: Uuid,
+        pub(crate) topic: String,
+        pub(crate) event: String,
+        pub(crate) payload: T,
+    }
+
+    #[derive(Debug, Clone, Deserialize_tuple)]
+    pub(crate) struct ReceivePhoenixMessage<T: DeserializeOwned> {
+        pub(crate) join_ref: Option<Uuid>,
+        pub(crate) msg_ref: Option<Uuid>,
+        pub(crate) topic: String,
+        pub(crate) event: String,
+        pub(crate) payload: T,
+    }
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub(crate) struct PhxReply<T> {
+        pub(crate) response: T,
+        pub(crate) status: String,
+    }
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub(crate) struct Empty {}
+}

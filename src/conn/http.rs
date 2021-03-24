@@ -1,14 +1,13 @@
 //! Connection over http using reqwest.
 //!
-//! You will usually use pretty much immediately turn the connection into a Client.
+//! You will usually pretty much immediately turn the connection into a Client.
 //! E.g.
 //! ```rust
-//! use glimesh::http::Connection
-//! let client = Connection::new(Auth::ClientId("<GLIMESH_CLIENT_ID>")).into_client();
+//! use glimesh::{http::Connection, Auth};
+//! let client = Connection::new(Auth::client_id("<GLIMESH_CLIENT_ID>")).into_client();
 //! ```
 
-use super::{MutationConn, QueryConn};
-use crate::{Auth, Client, Error};
+use crate::{Auth, Client, GlimeshError, HttpConnectionError, MutationConn, QueryConn};
 use reqwest::{header, RequestBuilder};
 use std::{sync::Arc, time::Duration};
 
@@ -105,21 +104,24 @@ impl Connection {
     }
 
     /// Create a client with reference to this connection
-    pub fn as_client(&self) -> Client<&Self> {
+    pub fn as_client(&self) -> Client<&Self, HttpConnectionError> {
         Client::new(self)
     }
 
     /// Create a client with a clone of this connection
-    pub fn to_client(&self) -> Client<Self> {
+    pub fn to_client(&self) -> Client<Self, HttpConnectionError> {
         Client::new(self.clone())
     }
 
     /// Convert this connection into a client
-    pub fn into_client(self) -> Client<Self> {
+    pub fn into_client(self) -> Client<Self, HttpConnectionError> {
         Client::new(self)
     }
 
-    async fn request<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Error>
+    async fn request<Q>(
+        &self,
+        variables: Q::Variables,
+    ) -> Result<Q::ResponseData, HttpConnectionError>
     where
         Q: graphql_client::GraphQLQuery,
     {
@@ -136,7 +138,7 @@ impl Connection {
             .map_err(anyhow::Error::from)?;
 
         if !res.status().is_success() {
-            return Err(Error::BadStatus(res.status().as_u16()));
+            return Err(HttpConnectionError::BadStatus(res.status().as_u16()));
         }
 
         let res: graphql_client::Response<Q::ResponseData> =
@@ -144,15 +146,15 @@ impl Connection {
 
         if let Some(errs) = res.errors {
             if errs.len() > 0 {
-                return Err(Error::GraphqlErrors(errs));
+                return Err(GlimeshError::GraphqlErrors(errs).into());
             }
         }
 
-        let data = res.data.ok_or_else(|| Error::NoData)?;
+        let data = res.data.ok_or_else(|| GlimeshError::NoData)?;
         Ok(data)
     }
 
-    async fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {
+    async fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, HttpConnectionError> {
         match self.auth.as_ref() {
             Auth::ClientId(client_id) => {
                 Ok(req.header(header::AUTHORIZATION, format!("Client-ID {}", client_id)))
@@ -172,7 +174,9 @@ impl Connection {
 
 #[async_trait]
 impl QueryConn for Connection {
-    async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Error>
+    type Error = HttpConnectionError;
+
+    async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Self::Error>
     where
         Q: graphql_client::GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -183,7 +187,9 @@ impl QueryConn for Connection {
 
 #[async_trait]
 impl MutationConn for Connection {
-    async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Error>
+    type Error = HttpConnectionError;
+
+    async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Self::Error>
     where
         Q: graphql_client::GraphQLQuery,
         Q::Variables: Send + Sync,

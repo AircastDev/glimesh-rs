@@ -11,7 +11,7 @@ use std::env;
 pub struct CurrentUserQuery;
 
 #[tokio::main]
-async fn main() -> Result<(), glimesh::Error> {
+async fn main() -> Result<(), glimesh::HttpConnectionError> {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
     let client_secret = env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET env var");
 

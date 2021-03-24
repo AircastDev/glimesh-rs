@@ -1,9 +1,7 @@
-use crate::{
-    conn::{MutationConn, QueryConn, SubscriptionConn},
-    error::Error,
-};
+use crate::conn::{MutationConn, QueryConn, SubscriptionConn};
 use futures::{channel::mpsc, Stream};
 use graphql_client::GraphQLQuery;
+use std::marker::PhantomData;
 
 /// Glimesh client.
 /// The client is generic over its connection/transport, meaning it can be used with http
@@ -11,26 +9,30 @@ use graphql_client::GraphQLQuery;
 ///
 /// To create a client you first create the underlying conneciton/transport,
 /// such as [`crate::http::Connection`].
-pub struct Client<T> {
+pub struct Client<T, E> {
     conn: T,
+    _err_type: PhantomData<E>,
 }
 
-impl<T> Client<T> {
+impl<T, E> Client<T, E> {
     /// Create a new client from a connection. Prefer calling `into_client` on the connection itself.
     pub fn new(conn: T) -> Self {
-        Self { conn }
+        Self {
+            conn,
+            _err_type: PhantomData,
+        }
     }
 }
 
-impl<T> Client<T>
+impl<T, E> Client<T, E>
 where
-    T: QueryConn,
+    T: QueryConn<Error = E>,
 {
     /// Perform a graphql query using the underlying connection.
     ///
     /// # Errors
     /// See [`QueryConn::query`] for error information
-    pub async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Error>
+    pub async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, E>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -39,15 +41,15 @@ where
     }
 }
 
-impl<T> Client<T>
+impl<T, E> Client<T, E>
 where
-    T: MutationConn,
+    T: MutationConn<Error = E>,
 {
     /// Perform a graphql mutation using the underlying connection
     ///
     /// # Errors
     /// See [`MutationConn::mutate`] for error information
-    pub async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, Error>
+    pub async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, E>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -74,9 +76,9 @@ impl SubscribeOpts {
     }
 }
 
-impl<T> Client<T>
+impl<T, E> Client<T, E>
 where
-    T: SubscriptionConn,
+    T: SubscriptionConn<Error = E>,
 {
     /// Subscribe to a graphql subcription using the underlying connection.
     /// This method is a shortcut for calling [`Self::subscribe_with_opts`] with default options.
@@ -86,7 +88,7 @@ where
     pub async fn subscribe<Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<impl Stream<Item = Q::ResponseData>, Error>
+    ) -> Result<impl Stream<Item = Q::ResponseData>, E>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -103,7 +105,7 @@ where
         &self,
         variables: Q::Variables,
         opts: SubscribeOpts,
-    ) -> Result<impl Stream<Item = Q::ResponseData>, Error>
+    ) -> Result<impl Stream<Item = Q::ResponseData>, E>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,

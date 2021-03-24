@@ -1,4 +1,4 @@
-use glimesh::{http::Connection, Auth};
+use glimesh::{ws::Connection, Auth};
 use graphql_client::GraphQLQuery;
 use std::env;
 
@@ -11,11 +11,11 @@ use std::env;
 pub struct UserDetailsQuery;
 
 #[tokio::main]
-async fn main() -> Result<(), glimesh::HttpConnectionError> {
+async fn main() -> Result<(), glimesh::WebsocketConnectionError> {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
 
     let auth = Auth::client_id(client_id);
-    let conn = Connection::new(auth);
+    let conn = Connection::connect(auth).await?;
     let client = conn.into_client();
 
     let res = client

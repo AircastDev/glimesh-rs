@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::AuthError;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -168,14 +168,14 @@ pub struct RefreshableAccessToken {
 
 impl RefreshableAccessToken {
     /// Refresh the access token using the refresh token
-    pub async fn refresh(&self) -> Result<AccessToken, Error> {
+    pub async fn refresh(&self) -> Result<AccessToken, AuthError> {
         let refresh_token = self
             .access_token
             .read()
             .await
             .refresh_token
             .clone()
-            .ok_or(Error::MissingRefreshToken)?;
+            .ok_or(AuthError::MissingRefreshToken)?;
         let res = self
             .http
             .post("https://glimesh.tv/api/oauth/token")
@@ -188,7 +188,7 @@ impl RefreshableAccessToken {
                     self.client
                         .redirect_uri
                         .as_ref()
-                        .ok_or(Error::MissingRedirect)?,
+                        .ok_or(AuthError::MissingRedirect)?,
                 ),
                 ("refresh_token", &refresh_token),
             ])
@@ -197,7 +197,7 @@ impl RefreshableAccessToken {
             .map_err(anyhow::Error::from)?;
 
         if !res.status().is_success() {
-            return Err(Error::BadStatus(res.status().as_u16()));
+            return Err(AuthError::BadStatus(res.status().as_u16()));
         }
 
         let new_token: AccessToken = res.json().await.map_err(anyhow::Error::from)?;
@@ -215,7 +215,7 @@ impl RefreshableAccessToken {
     }
 
     /// Obtain an access token, will refresh the token if near expiry.
-    pub async fn access_token(&self) -> Result<AccessToken, Error> {
+    pub async fn access_token(&self) -> Result<AccessToken, AuthError> {
         let token = self.access_token.read().await.clone();
         let expires_at = token.created_at + Duration::seconds(token.expires_in);
         if (expires_at - Duration::seconds(EXPIRY_BUFFER)) > Utc::now() {
@@ -235,7 +235,7 @@ pub struct ClientCredentials {
 
 impl ClientCredentials {
     /// Refresh or obtain a new access token using the client credentials
-    pub async fn refresh(&self) -> Result<AccessToken, Error> {
+    pub async fn refresh(&self) -> Result<AccessToken, AuthError> {
         let res = self
             .http
             .post("https://glimesh.tv/api/oauth/token")
@@ -249,7 +249,7 @@ impl ClientCredentials {
             .map_err(anyhow::Error::from)?;
 
         if !res.status().is_success() {
-            return Err(Error::BadStatus(res.status().as_u16()));
+            return Err(AuthError::BadStatus(res.status().as_u16()));
         }
 
         let new_token: AccessToken = res.json().await.map_err(anyhow::Error::from)?;
@@ -263,7 +263,7 @@ impl ClientCredentials {
     }
 
     /// Obtain an access token, will refresh the token if near expiry.
-    pub async fn access_token(&self) -> Result<AccessToken, Error> {
+    pub async fn access_token(&self) -> Result<AccessToken, AuthError> {
         let access_token = self.access_token.read().await.clone();
         if let Some(token) = access_token {
             let expires_at = token.created_at + Duration::seconds(token.expires_in);

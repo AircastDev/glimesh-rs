@@ -9,9 +9,9 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 -   [x] Queries
 -   [x] Mutations
 -   [x] Http based connection
+-   [x] Websocket based connection
 -   [x] Automatic access token refreshing
 -   [ ] Subscriptions
--   [ ] Websocket based connection
 -   [ ] Reconnect and resubscribe to subscriptions on socket failure
 -   [ ] Batch subscriptions
 
@@ -20,7 +20,7 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 More examples can be found in the `examples/` directory.
 
 ```rust
-use glimesh::{http::Connection, Auth, Error};
+use glimesh::{http::Connection, Auth, HttpConnectionError};
 use graphql_client::GraphQLQuery;
 use std::env;
 
@@ -33,7 +33,7 @@ use std::env;
 pub struct UserDetailsQuery;
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), HttpConnectionError> {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
 
     let auth = Auth::client_id(client_id);

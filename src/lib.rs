@@ -12,7 +12,7 @@
 //! More examples can be found in the `examples/` directory.
 //!
 //! ```rust
-//! # use glimesh::{http::Connection, Auth, Error};
+//! # use glimesh::{http::Connection, Auth, HttpConnectionError};
 //! # use graphql_client::GraphQLQuery;
 //! # use std::env;
 //! #
@@ -25,7 +25,7 @@
 //! pub struct UserDetailsQuery;
 //! #
 //! # #[tokio::main]
-//! # async fn main() -> Result<(), Error> {
+//! # async fn main() -> Result<(), HttpConnectionError> {
 //! #    let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
 //!
 //! let auth = Auth::client_id(client_id);
@@ -77,4 +77,4 @@ mod error;
 pub use auth::Auth;
 pub use client::Client;
 pub use conn::*;
-pub use error::Error;
+pub use error::*;
