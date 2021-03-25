@@ -6,14 +6,12 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 
 ## Features
 
--   [x] Queries
--   [x] Mutations
--   [x] Http based connection
--   [x] Websocket based connection
--   [x] Automatic access token refreshing
--   [ ] Subscriptions
--   [ ] Reconnect and resubscribe to subscriptions on socket failure
--   [ ] Batch subscriptions
+-   Queries
+-   Mutations
+-   Subscriptions
+-   HTTP or Websocket connection
+-   Automatic access token refreshing
+-   Reconnect and resubscribe to subscriptions on socket failure
 
 ## Example
 

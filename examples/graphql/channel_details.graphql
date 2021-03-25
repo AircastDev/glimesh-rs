@@ -1,0 +1,5 @@
+query ChannelDetailsQuery($username: String!) {
+	channel(username: $username) {
+		id
+	}
+}

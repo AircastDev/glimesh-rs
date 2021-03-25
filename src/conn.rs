@@ -1,4 +1,4 @@
-use futures::channel::mpsc;
+use futures::stream::BoxStream;
 use graphql_client::GraphQLQuery;
 
 #[cfg(feature = "http")]
@@ -51,7 +51,12 @@ pub trait SubscriptionConn {
 
     /// Send a graphql subscription over this connection.
     /// The future will resolve when the subscription has been established,
-    /// and then any messages will be sent to the passed in mpsc Sender.
+    /// and then any messages will be sent on the returned stream
+    ///
+    /// This subscription is resiliant against errors on the underlying connection, such that
+    /// for example, if the websocket connection fails, when/if it succesfully reconnects, the
+    /// subscriptions will be replayed on the new connection. This is currently unobservable,
+    /// please open an issue if you need to be able to detect when this happens.
     ///
     /// # Errors
     /// This function may error if there was a problem with the underlying connection such as
@@ -60,8 +65,7 @@ pub trait SubscriptionConn {
     async fn subscribe<Q>(
         &self,
         variables: Q::Variables,
-        sender: mpsc::Sender<Q::ResponseData>,
-    ) -> Result<(), Self::Error>
+    ) -> Result<BoxStream<Q::ResponseData>, Self::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync;

@@ -2,7 +2,11 @@ use super::{
     config::Config,
     socket::{Socket, SocketClient},
 };
-use crate::{Auth, Client, GlimeshError, MutationConn, QueryConn, WebsocketConnectionError};
+use crate::{
+    Auth, Client, GlimeshError, MutationConn, QueryConn, SubscriptionConn, WebsocketConnectionError,
+};
+use futures::stream::BoxStream;
+use graphql_client::GraphQLQuery;
 use std::{fmt::Debug, time::Duration};
 
 /// Configure and build a websocket [`Connection`].
@@ -170,5 +174,21 @@ impl MutationConn for Connection {
         Q::Variables: Send + Sync,
     {
         self.request::<Q>(variables).await
+    }
+}
+
+#[async_trait]
+impl SubscriptionConn for Connection {
+    type Error = WebsocketConnectionError;
+
+    async fn subscribe<Q>(
+        &self,
+        variables: Q::Variables,
+    ) -> Result<BoxStream<Q::ResponseData>, Self::Error>
+    where
+        Q: GraphQLQuery,
+        Q::Variables: Send + Sync,
+    {
+        self.socket.subscribe(Q::build_query(variables)).await
     }
 }

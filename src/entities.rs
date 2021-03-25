@@ -52,4 +52,17 @@ pub(crate) mod ws {
     }
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub(crate) struct Empty {}
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub(crate) struct EventSubscription {
+        pub result: serde_json::Value,
+        pub subscription_id: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub(crate) struct DocumentSubscribeResponse {
+        pub subscription_id: String,
+    }
 }

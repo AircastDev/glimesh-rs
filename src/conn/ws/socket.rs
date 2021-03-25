@@ -1,21 +1,27 @@
 use super::config::Config;
 use crate::{
-    entities::ws::{Empty, PhxReply, ReceivePhoenixMessage, SendPhoenixMessage},
+    entities::ws::{
+        DocumentSubscribeResponse, Empty, EventSubscription, PhxReply, ReceivePhoenixMessage,
+        SendPhoenixMessage,
+    },
     Auth, WebsocketConnectionError,
 };
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
 use backoff::{backoff::Backoff, ExponentialBackoff};
-use futures::{future::BoxFuture, SinkExt};
+use futures::{future::BoxFuture, stream::BoxStream, FutureExt, SinkExt, Stream};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
-use std::{fmt::Debug, time::Duration};
+use std::{collections::HashMap, fmt::Debug, time::Duration};
 use tokio::{
     select,
     sync::{broadcast, mpsc},
     task,
     time::{sleep, timeout},
 };
-use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+use tokio_stream::{
+    wrappers::{BroadcastStream, ReceiverStream},
+    StreamExt,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -29,8 +35,25 @@ pub(super) struct Socket {
         broadcast::Sender<ReceivePhoenixMessage<Value>>,
         broadcast::Receiver<ReceivePhoenixMessage<Value>>,
     ),
+    subscriptions: Option<HashMap<String, SubscriptionRef>>,
+    new_subscriptions: (
+        mpsc::Sender<(String, SubscriptionRef)>,
+        Option<mpsc::Receiver<(String, SubscriptionRef)>>,
+    ),
     cancellation_token: CancellationToken,
-    handle: Option<BoxFuture<'static, Result<mpsc::Receiver<Message>, WebsocketConnectionError>>>,
+    handle: Option<
+        BoxFuture<
+            'static,
+            Result<
+                (
+                    mpsc::Receiver<Message>,
+                    mpsc::Receiver<(String, SubscriptionRef)>,
+                    HashMap<String, SubscriptionRef>,
+                ),
+                WebsocketConnectionError,
+            >,
+        >,
+    >,
 }
 
 impl Debug for Socket {
@@ -48,6 +71,8 @@ impl Socket {
         let (outgoing_messages_sender, outgoing_messages_receiver) =
             mpsc::channel(config.outgoing_capacity);
         let incoming_messages = broadcast::channel(config.incoming_capacity);
+        let (new_subscriptions_sender, new_subscriptions_receiver) =
+            mpsc::channel(config.incoming_capacity);
 
         Self {
             auth,
@@ -55,6 +80,8 @@ impl Socket {
             join_ref: Uuid::new_v4(),
             outgoing_messages: (outgoing_messages_sender, Some(outgoing_messages_receiver)),
             incoming_messages,
+            subscriptions: Some(Default::default()),
+            new_subscriptions: (new_subscriptions_sender, Some(new_subscriptions_receiver)),
             cancellation_token: CancellationToken::new(),
             handle: None,
         }
@@ -65,6 +92,7 @@ impl Socket {
             join_ref: self.join_ref,
             outgoing_messages: self.outgoing_messages.0.clone(),
             incoming_messages: self.incoming_messages.0.clone(),
+            new_subscriptions: self.new_subscriptions.0.clone(),
             request_timeout: self.config.request_timeout,
             cancellation_token: self.cancellation_token.clone(),
         }
@@ -231,16 +259,110 @@ impl Socket {
             .instrument(tracing::trace_span!("pinger"))
         };
 
-        self.handle.replace(Box::pin(async move {
-            incoming_messages_handle
-                .await
-                .map_err(anyhow::Error::from)?;
-            pinger_handle.await.map_err(anyhow::Error::from)?;
-            let outgoing_messages_receiver = outgoing_messages_handle
-                .await
-                .map_err(anyhow::Error::from)?;
-            Ok::<_, WebsocketConnectionError>(outgoing_messages_receiver)
-        }));
+        let subscriptions_handle = {
+            let socket_client = self.client();
+            let mut new_subscriptions_receiver = self
+                .new_subscriptions
+                .1
+                .take()
+                .ok_or(WebsocketConnectionError::AlreadyConnected)?;
+            let mut subscriptions = self
+                .subscriptions
+                .take()
+                .ok_or(WebsocketConnectionError::AlreadyConnected)?;
+            task::spawn(async move {
+                let subs = subscriptions.drain().collect::<Vec<_>>();
+                for (_, sub) in subs {
+                    match socket_client
+                        .request::<_, DocumentSubscribeResponse>(
+                            "__absinthe__:control".into(),
+                            "doc".into(),
+                            &sub.payload,
+                        )
+                        .await
+                    {
+                        Ok(subscription) => {
+                            let sub_id = subscription.response.subscription_id;
+                            subscriptions.insert(sub_id, sub);
+                        }
+                        Err(err) => {
+                            tracing::error!(?err, ?sub, "failed to resubscribe");
+                        }
+                    }
+                }
+
+                let mut messages = socket_client.filter_messages::<EventSubscription, _>(|msg| {
+                    msg.event == "subscription:data" && msg.topic.starts_with("__absinthe__:doc")
+                });
+
+                loop {
+                    select! {
+                        _ = cancellation_token.cancelled() => {
+                            tracing::trace!("received cancellation signal");
+                            break;
+                        }
+                        sub = new_subscriptions_receiver.recv() => {
+                            match sub {
+                                Some((sub_id, sub)) => {
+                                    subscriptions.insert(sub_id, sub);
+                                }
+                                None => {
+                                    tracing::trace!("all senders were dropped");
+                                    cancellation_token.cancel();
+                                    break;
+                                }
+                            }
+                        }
+                        msg = messages.next() => {
+                            match msg {
+                                Some(EventSubscription{ result, subscription_id }) => {
+                                    if let Some(subscriber) = subscriptions.get(&subscription_id) {
+                                        match serde_json::from_value::<graphql_client::Response<Value>>(result) {
+                                            Ok(msg) => {
+                                                if let Err(err) = subscriber.sender.send(msg).await {
+                                                    tracing::error!(?err, "failed to notify subscriber of event");
+                                                }
+                                            }
+                                            Err(err) => {
+                                                tracing::error!(?err, "invalid subscription message received");
+                                            }
+                                        }
+                                    }
+                                }
+                                None => {
+                                    tracing::trace!("all senders were dropped");
+                                    cancellation_token.cancel();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                (new_subscriptions_receiver, subscriptions)
+            })
+            .instrument(tracing::trace_span!("subscriptions"))
+        };
+
+        self.handle.replace(
+            async move {
+                incoming_messages_handle
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                pinger_handle.await.map_err(anyhow::Error::from)?;
+                let outgoing_messages_receiver = outgoing_messages_handle
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                let (new_subscriptions_receiver, subscriptions) =
+                    subscriptions_handle.await.map_err(anyhow::Error::from)?;
+                Ok::<_, WebsocketConnectionError>((
+                    outgoing_messages_receiver,
+                    new_subscriptions_receiver,
+                    subscriptions,
+                ))
+            }
+            .boxed(),
+        );
 
         Ok(())
     }
@@ -285,9 +407,19 @@ impl Socket {
             .handle
             .take()
             .ok_or(WebsocketConnectionError::SocketClosed)?;
-        self.outgoing_messages.1.replace(handle.await?);
+        let (outgoing_messages_receiver, new_subscriptions_receiver, subscriptions) =
+            handle.await?;
+        self.outgoing_messages.1.replace(outgoing_messages_receiver);
+        self.new_subscriptions.1.replace(new_subscriptions_receiver);
+        self.subscriptions.replace(subscriptions);
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct SubscriptionRef {
+    payload: Value,
+    sender: mpsc::Sender<graphql_client::Response<Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -295,6 +427,7 @@ pub(super) struct SocketClient {
     join_ref: Uuid,
     outgoing_messages: mpsc::Sender<Message>,
     incoming_messages: broadcast::Sender<ReceivePhoenixMessage<Value>>,
+    new_subscriptions: mpsc::Sender<(String, SubscriptionRef)>,
     request_timeout: Duration,
     cancellation_token: CancellationToken,
 }
@@ -314,34 +447,63 @@ impl SocketClient {
         let msg = serde_json::to_string(&SendPhoenixMessage {
             join_ref: self.join_ref,
             msg_ref,
-            topic: topic.into(),
-            event: event.into(),
+            topic,
+            event,
             payload,
         })?;
         self.outgoing_messages.send(msg.into()).await?;
 
         timeout(
             self.request_timeout,
-            BroadcastStream::new(self.incoming_messages.subscribe())
-                .filter_map(|msg| match msg {
-                    Ok(msg) => {
-                        if msg.msg_ref == Some(msg_ref) {
-                            Some(
-                                serde_json::from_value::<PhxReply<U>>(msg.payload)
-                                    .map_err(WebsocketConnectionError::from),
-                            )
-                        } else {
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                })
+            self.filter_messages::<PhxReply<U>, _>(move |msg| msg.msg_ref == Some(msg_ref))
                 .take(1)
                 .next(),
         )
         .await?
         .ok_or(WebsocketConnectionError::SocketClosed)
-        .and_then(|r| r) // .flatten() is unstable
+    }
+
+    pub async fn subscribe<T, U>(
+        &self,
+        payload: T,
+    ) -> Result<BoxStream<'_, U>, WebsocketConnectionError>
+    where
+        T: Serialize,
+        U: DeserializeOwned,
+    {
+        let subscription: PhxReply<DocumentSubscribeResponse> = self
+            .request("__absinthe__:control".into(), "doc".into(), &payload)
+            .await?;
+        let payload = serde_json::to_value(&payload)?;
+
+        let (sender, receiver) = mpsc::channel(10);
+
+        let sub_id = subscription.response.subscription_id;
+        self.new_subscriptions
+            .send((sub_id, SubscriptionRef { payload, sender }))
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(Box::pin(
+            ReceiverStream::new(receiver).filter_map(|res| serde_json::from_value(res.data?).ok()),
+        ))
+    }
+
+    pub fn filter_messages<T, F>(&self, mut predicate: F) -> impl Stream<Item = T>
+    where
+        T: DeserializeOwned,
+        F: FnMut(&ReceivePhoenixMessage<Value>) -> bool,
+    {
+        BroadcastStream::new(self.incoming_messages.subscribe()).filter_map(move |msg| match msg {
+            Ok(msg) => {
+                if predicate(&msg) {
+                    serde_json::from_value::<T>(msg.payload).ok()
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        })
     }
 
     pub fn close(self) {

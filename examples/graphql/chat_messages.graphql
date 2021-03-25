@@ -1,0 +1,8 @@
+subscription ChatMessagesSubscription($id: ID!) {
+	chatMessage(channelId: $id) {
+		message
+		user {
+			displayname
+		}
+	}
+}

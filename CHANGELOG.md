@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Subscription support on the websocket connection
+
+### Breaking Changes
+
+-   Subscription trait was changed to returning a boxed stream instead of taking a channel sender.
+-   `subscribe_with_opts` was removed as its no longer needed
+
 ## v0.3.0 (2021-03-25)
 
 ### Added
