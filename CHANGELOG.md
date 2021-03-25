@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1 (2021-03-25)
+
+### Fixed
+
+-   Require async-trait v1.0.43 or above as versions below don't work with the subscription trait due to lifetime issues.
+
 ## v0.4.0 (2021-03-25)
 
 ### Added
