@@ -124,6 +124,7 @@ impl Auth {
     }
 }
 
+/// Stored information about the access token
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessToken {
     /// Glimesh access token

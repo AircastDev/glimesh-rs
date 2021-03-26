@@ -109,12 +109,12 @@ impl Connection {
     }
 
     /// Create a client with a clone of this connection
-    pub fn to_client(&self) -> Client<Self, HttpConnectionError> {
+    pub fn to_client(&self) -> HttpClient {
         Client::new(self.clone())
     }
 
     /// Convert this connection into a client
-    pub fn into_client(self) -> Client<Self, HttpConnectionError> {
+    pub fn into_client(self) -> HttpClient {
         Client::new(self)
     }
 
@@ -197,3 +197,6 @@ impl MutationConn for Connection {
         self.request::<Q>(variables).await
     }
 }
+
+/// Type alias for a http backed client
+pub type HttpClient = Client<Connection, HttpConnectionError>;

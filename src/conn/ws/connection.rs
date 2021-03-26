@@ -1,6 +1,7 @@
 use super::{
     config::Config,
     socket::{Socket, SocketClient},
+    WebsocketClient,
 };
 use crate::{
     Auth, Client, GlimeshError, MutationConn, QueryConn, SubscriptionConn, WebsocketConnectionError,
@@ -108,12 +109,12 @@ impl Connection {
     }
 
     /// Create a client with a clone of this connection
-    pub fn to_client(&self) -> Client<Self, WebsocketConnectionError> {
+    pub fn to_client(&self) -> WebsocketClient {
         Client::new(self.clone())
     }
 
     /// Convert this connection into a client
-    pub fn into_client(self) -> Client<Self, WebsocketConnectionError> {
+    pub fn into_client(self) -> WebsocketClient {
         Client::new(self)
     }
 

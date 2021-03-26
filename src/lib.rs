@@ -76,7 +76,7 @@ mod conn;
 mod entities;
 mod error;
 
-pub use auth::Auth;
+pub use auth::{AccessToken, Auth};
 pub use client::Client;
 pub use conn::*;
 pub use error::*;

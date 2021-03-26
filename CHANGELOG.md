@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Type aliases for websocket & http clients.
+
+### Fixed
+
+-   Export `AccessToken` struct
+
 ## v0.4.1 (2021-03-25)
 
 ### Fixed

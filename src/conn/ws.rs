@@ -11,4 +11,8 @@ mod config;
 mod connection;
 mod socket;
 
+use crate::{Client, WebsocketConnectionError};
 pub use connection::{Connection, ConnectionBuilder};
+
+/// Type alias for a websocket backed client
+pub type WebsocketClient = Client<Connection, WebsocketConnectionError>;
