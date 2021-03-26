@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Implement `Clone` + `Debug` for Client where the connection does also
+
 ## v0.4.2 (2021-03-26)
 
 ### Added

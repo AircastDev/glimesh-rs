@@ -1,7 +1,7 @@
 use crate::conn::{MutationConn, QueryConn, SubscriptionConn};
 use futures::stream::BoxStream;
 use graphql_client::GraphQLQuery;
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 /// Glimesh client.
 /// The client is generic over its connection/transport, meaning it can be used with http
@@ -21,6 +21,21 @@ impl<T, E> Client<T, E> {
             conn,
             _err_type: PhantomData,
         }
+    }
+}
+
+impl<T: Clone, E> Clone for Client<T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            conn: self.conn.clone(),
+            _err_type: PhantomData,
+        }
+    }
+}
+
+impl<T: Debug, E> Debug for Client<T, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client").field("conn", &self.conn).finish()
     }
 }
 
