@@ -7,6 +7,11 @@
 -   Implement `Clone` + `Debug` for Client where the connection does also
 -   Expose `glimesh_date` module
 
+### Breaking Changes
+
+-   SubscriptionConn no longer binds the returned stream to the lifetime of self.
+-   Client updated to reflect the above change
+
 ## v0.4.2 (2021-03-26)
 
 ### Added

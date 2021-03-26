@@ -40,15 +40,20 @@ async fn main() -> Result<(), glimesh::WebsocketConnectionError> {
         })
         .await?;
 
-    println!("Subscribed to chat messages on channel #{}", channel_id);
-    while let Some(msg) = messages.next().await {
-        let chat_message = msg.chat_message.unwrap();
-        println!(
-            "[{}]: {}",
-            chat_message.user.displayname.unwrap(),
-            chat_message.message.unwrap()
-        );
-    }
+    // `messages` can be sent to a different thread if desired
+    tokio::spawn(async move {
+        println!("Subscribed to chat messages on channel #{}", channel_id);
+        while let Some(msg) = messages.next().await {
+            let chat_message = msg.chat_message.unwrap();
+            println!(
+                "[{}]: {}",
+                chat_message.user.displayname.unwrap(),
+                chat_message.message.unwrap()
+            );
+        }
+    })
+    .await
+    .unwrap();
 
     Ok(())
 }

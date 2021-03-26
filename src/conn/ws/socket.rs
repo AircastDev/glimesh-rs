@@ -463,10 +463,10 @@ impl SocketClient {
         .ok_or(WebsocketConnectionError::SocketClosed)
     }
 
-    pub async fn subscribe<T, U>(
+    pub async fn subscribe<'a, T, U>(
         &self,
         payload: T,
-    ) -> Result<BoxStream<'_, U>, WebsocketConnectionError>
+    ) -> Result<BoxStream<'a, U>, WebsocketConnectionError>
     where
         T: Serialize,
         U: DeserializeOwned,

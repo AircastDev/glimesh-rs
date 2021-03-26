@@ -62,10 +62,10 @@ pub trait SubscriptionConn {
     /// This function may error if there was a problem with the underlying connection such as
     /// a dns resolution error, or the websocket is disconnected, or if the api returned an error
     /// or the api response failed to decode.
-    async fn subscribe<Q>(
+    async fn subscribe<'a, Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<BoxStream<Q::ResponseData>, Self::Error>
+    ) -> Result<BoxStream<'a, Q::ResponseData>, Self::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync;

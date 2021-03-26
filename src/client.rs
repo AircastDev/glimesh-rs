@@ -81,10 +81,10 @@ where
     ///
     /// # Errors
     /// See [`SubscriptionConn::subscribe`] for error information
-    pub async fn subscribe<Q>(
+    pub async fn subscribe<'a, Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<BoxStream<'_, Q::ResponseData>, E>
+    ) -> Result<BoxStream<'a, Q::ResponseData>, E>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,

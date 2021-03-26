@@ -182,10 +182,10 @@ impl MutationConn for Connection {
 impl SubscriptionConn for Connection {
     type Error = WebsocketConnectionError;
 
-    async fn subscribe<Q>(
+    async fn subscribe<'a, Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<BoxStream<Q::ResponseData>, Self::Error>
+    ) -> Result<BoxStream<'a, Q::ResponseData>, Self::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
