@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 (2021-03-26)
 
 ### Added
 
@@ -9,8 +9,8 @@
 
 ### Breaking Changes
 
--   SubscriptionConn no longer binds the returned stream to the lifetime of self.
--   Client updated to reflect the above change
+-   `SubscriptionConn` no longer binds the returned stream to the lifetime of self.
+-   `Client` updated to reflect the above change
 
 ## v0.4.2 (2021-03-26)
 
