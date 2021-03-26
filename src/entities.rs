@@ -1,9 +1,13 @@
 pub mod glimesh_date {
+    //! Glimesh date serialization. Glimesh uses a strange date format,
+    //! use this module with `#[serde(with = ...)]` to (de)serialize dates in Glimesh format.
+
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
 
     const FORMAT: &'static str = "%FT%T";
 
+    /// Serialize date in Glimesh format
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -12,6 +16,7 @@ pub mod glimesh_date {
         serializer.serialize_str(&s)
     }
 
+    /// Deserialize date in Glimesh format
     pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: Deserializer<'de>,

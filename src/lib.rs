@@ -79,4 +79,5 @@ mod error;
 pub use auth::{AccessToken, Auth};
 pub use client::Client;
 pub use conn::*;
+pub use entities::glimesh_date;
 pub use error::*;

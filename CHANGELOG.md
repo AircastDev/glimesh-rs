@@ -5,6 +5,7 @@
 ### Added
 
 -   Implement `Clone` + `Debug` for Client where the connection does also
+-   Expose `glimesh_date` module
 
 ## v0.4.2 (2021-03-26)
 
