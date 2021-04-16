@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Added method `into_connection` to turn a client back into it's underlying connection
+
 ## v0.5.0 (2021-03-26)
 
 ### Added

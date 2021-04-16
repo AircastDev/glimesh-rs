@@ -22,6 +22,11 @@ impl<T, E> Client<T, E> {
             _err_type: PhantomData,
         }
     }
+
+    /// Turn this client back into its underlying connection
+    pub fn into_connection(self) -> T {
+        self.conn
+    }
 }
 
 impl<T: Clone, E> Clone for Client<T, E> {
