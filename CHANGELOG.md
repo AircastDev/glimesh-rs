@@ -6,6 +6,10 @@
 
 -   Added method `into_connection` to turn a client back into it's underlying connection
 
+### Fixed
+
+-   Include `AuthError` type even when http feature is disabled
+
 ## v0.5.0 (2021-03-26)
 
 ### Added

@@ -13,7 +13,6 @@ pub enum GlimeshError {
 }
 
 /// Errors that can occur obtaining and refreshing access tokens
-#[cfg(feature = "http")]
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
     /// A request returned a bad status code. This may happen if the auth credentials
