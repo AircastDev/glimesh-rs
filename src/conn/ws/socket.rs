@@ -271,68 +271,91 @@ impl Socket {
                 .take()
                 .ok_or(WebsocketConnectionError::AlreadyConnected)?;
             task::spawn(async move {
-                let subs = subscriptions.drain().collect::<Vec<_>>();
-                for (_, sub) in subs {
-                    match socket_client
-                        .request::<_, DocumentSubscribeResponse>(
-                            "__absinthe__:control".into(),
-                            "doc".into(),
-                            &sub.payload,
-                        )
-                        .await
-                    {
-                        Ok(subscription) => {
-                            let sub_id = subscription.response.subscription_id;
+                let sub_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
+                for old_sub_id in sub_ids {
+                    let sub = subscriptions.remove(&old_sub_id).unwrap();
+                    let op = || async {
+                        let res = socket_client
+                            .request::<_, DocumentSubscribeResponse>(
+                                "__absinthe__:control".into(),
+                                "doc".into(),
+                                &sub.payload,
+                            )
+                            .await;
+
+                        match res {
+                            Ok(subscription) => {
+                                Ok(subscription.response.subscription_id)
+                            }
+                            Err(err) => {
+                                tracing::debug!(?err, ?sub, "failed to resubscribe");
+
+                                if cancellation_token.is_cancelled() {
+                                    Err(backoff::Error::Permanent(err))
+                                } else {
+                                    Err(backoff::Error::Transient(err))
+                                }
+                            }
+                        }
+                    };
+                    
+                    match backoff::future::retry(ExponentialBackoff::default(), op).await {
+                        Ok(sub_id) => {
+                            tracing::debug!(?sub, "resubscribed");
                             subscriptions.insert(sub_id, sub);
                         }
                         Err(err) => {
-                            tracing::error!(?err, ?sub, "failed to resubscribe");
+                            tracing::error!(?err, "fatal error trying to resubscribe to subscriptions");
+                            // add the old sub back so we can retry on reconnect
+                            subscriptions.insert(old_sub_id, sub);
                         }
                     }
                 }
 
-                let mut messages = socket_client.filter_messages::<EventSubscription, _>(|msg| {
-                    msg.event == "subscription:data" && msg.topic.starts_with("__absinthe__:doc")
-                });
+                if !cancellation_token.is_cancelled() {
+                    let mut messages = socket_client.filter_messages::<EventSubscription, _>(|msg| {
+                        msg.event == "subscription:data" && msg.topic.starts_with("__absinthe__:doc")
+                    });
 
-                loop {
-                    select! {
-                        _ = cancellation_token.cancelled() => {
-                            tracing::trace!("received cancellation signal");
-                            break;
-                        }
-                        sub = new_subscriptions_receiver.recv() => {
-                            match sub {
-                                Some((sub_id, sub)) => {
-                                    subscriptions.insert(sub_id, sub);
-                                }
-                                None => {
-                                    tracing::trace!("all senders were dropped");
-                                    cancellation_token.cancel();
-                                    break;
+                    loop {
+                        select! {
+                            _ = cancellation_token.cancelled() => {
+                                tracing::trace!("received cancellation signal");
+                                break;
+                            }
+                            sub = new_subscriptions_receiver.recv() => {
+                                match sub {
+                                    Some((sub_id, sub)) => {
+                                        subscriptions.insert(sub_id, sub);
+                                    }
+                                    None => {
+                                        tracing::trace!("all senders were dropped");
+                                        cancellation_token.cancel();
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        msg = messages.next() => {
-                            match msg {
-                                Some(EventSubscription{ result, subscription_id }) => {
-                                    if let Some(subscriber) = subscriptions.get(&subscription_id) {
-                                        match serde_json::from_value::<graphql_client::Response<Value>>(result) {
-                                            Ok(msg) => {
-                                                if let Err(err) = subscriber.sender.send(msg).await {
-                                                    tracing::error!(?err, "failed to notify subscriber of event");
+                            msg = messages.next() => {
+                                match msg {
+                                    Some(EventSubscription{ result, subscription_id }) => {
+                                        if let Some(subscriber) = subscriptions.get(&subscription_id) {
+                                            match serde_json::from_value::<graphql_client::Response<Value>>(result) {
+                                                Ok(msg) => {
+                                                    if let Err(err) = subscriber.sender.send(msg).await {
+                                                        tracing::error!(?err, "failed to notify subscriber of event");
+                                                    }
                                                 }
-                                            }
-                                            Err(err) => {
-                                                tracing::error!(?err, "invalid subscription message received");
+                                                Err(err) => {
+                                                    tracing::error!(?err, "invalid subscription message received");
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                None => {
-                                    tracing::trace!("all senders were dropped");
-                                    cancellation_token.cancel();
-                                    break;
+                                    None => {
+                                        tracing::trace!("all senders were dropped");
+                                        cancellation_token.cancel();
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -364,6 +387,8 @@ impl Socket {
             .boxed(),
         );
 
+        tracing::debug!("connected to socket");
+
         Ok(())
     }
 
@@ -394,10 +419,12 @@ impl Socket {
                         None => {
                             tracing::error!(?err, "failed to reconnect, after many attempts");
                             // TODO: some way of bubbling this up to the consumer
-                            break;
+                            return;
                         }
                     }
                 }
+
+                tracing::info!("successfully reconnected")
             }
         });
     }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+-   Retry resubscriptions as long as the socket is connected [#1](https://github.com/AircastDev/glimesh-rs/issues/1)
+
 ## v0.5.1 (2021-04-16)
 
 ### Added

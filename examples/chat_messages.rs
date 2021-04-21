@@ -21,15 +21,22 @@ pub struct ChatMessagesSubscription;
 
 #[tokio::main]
 async fn main() -> Result<(), glimesh::WebsocketConnectionError> {
+    tracing_subscriber::fmt()
+        .with_env_filter("info,glimesh=debug")
+        .init();
+
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID env var");
+    let api_url = env::var("API_URL")
+        .unwrap_or_else(|_| String::from("wss://glimesh.tv/api/socket/websocket"));
+    let channel_name = env::var("CHANNEL_NAME").unwrap_or_else(|_| String::from("JamesTest"));
 
     let auth = Auth::client_id(client_id);
-    let conn = Connection::connect(auth).await?;
+    let conn = Connection::builder().api_url(api_url).connect(auth).await?;
     let client = conn.into_client();
 
     let res = client
         .query::<ChannelDetailsQuery>(channel_details_query::Variables {
-            username: "JamesTest".into(),
+            username: channel_name,
         })
         .await?;
 
@@ -42,10 +49,10 @@ async fn main() -> Result<(), glimesh::WebsocketConnectionError> {
 
     // `messages` can be sent to a different thread if desired
     tokio::spawn(async move {
-        println!("Subscribed to chat messages on channel #{}", channel_id);
+        tracing::info!("Subscribed to chat messages on channel #{}", channel_id);
         while let Some(msg) = messages.next().await {
             let chat_message = msg.chat_message.unwrap();
-            println!(
+            tracing::info!(
                 "[{}]: {}",
                 chat_message.user.displayname.unwrap(),
                 chat_message.message.unwrap()
