@@ -273,6 +273,11 @@ impl Socket {
             task::spawn(async move {
                 let sub_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
                 for old_sub_id in sub_ids {
+                    // break out early if we've been told to cancel
+                    if cancellation_token.is_cancelled() {
+                        break;
+                    }
+
                     let sub = subscriptions.remove(&old_sub_id).unwrap();
                     let op = || async {
                         let res = socket_client
@@ -305,9 +310,11 @@ impl Socket {
                             subscriptions.insert(sub_id, sub);
                         }
                         Err(err) => {
-                            tracing::error!(?err, "fatal error trying to resubscribe to subscriptions");
+                            tracing::error!(?err, "fatal error trying to resubscribe to subscriptions (did the socket die?)");
                             // add the old sub back so we can retry on reconnect
                             subscriptions.insert(old_sub_id, sub);
+                            // break of the loop, the socket is dead, lets reconnect
+                            break;
                         }
                     }
                 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+-   Stop retrying subscriptions if the socket dies whilst doing so (#2)
+
 ## v0.5.2 (2021-04-21)
 
 ### Fixed
