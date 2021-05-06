@@ -26,6 +26,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
+type SubscriptionPair = (String, SubscriptionRef);
+type CloseState = (
+    mpsc::Receiver<Message>,
+    mpsc::Receiver<(String, SubscriptionRef)>,
+    HashMap<String, SubscriptionRef>,
+);
+
 pub(super) struct Socket {
     auth: Auth,
     config: Config,
@@ -37,23 +44,11 @@ pub(super) struct Socket {
     ),
     subscriptions: Option<HashMap<String, SubscriptionRef>>,
     new_subscriptions: (
-        mpsc::Sender<(String, SubscriptionRef)>,
-        Option<mpsc::Receiver<(String, SubscriptionRef)>>,
+        mpsc::Sender<SubscriptionPair>,
+        Option<mpsc::Receiver<SubscriptionPair>>,
     ),
     cancellation_token: CancellationToken,
-    handle: Option<
-        BoxFuture<
-            'static,
-            Result<
-                (
-                    mpsc::Receiver<Message>,
-                    mpsc::Receiver<(String, SubscriptionRef)>,
-                    HashMap<String, SubscriptionRef>,
-                ),
-                WebsocketConnectionError,
-            >,
-        >,
-    >,
+    handle: Option<BoxFuture<'static, Result<CloseState, WebsocketConnectionError>>>,
 }
 
 impl Debug for Socket {
@@ -303,7 +298,7 @@ impl Socket {
                             }
                         }
                     };
-                    
+
                     match backoff::future::retry(ExponentialBackoff::default(), op).await {
                         Ok(sub_id) => {
                             tracing::debug!(?sub, "resubscribed");

@@ -142,12 +142,12 @@ impl Connection {
         let res: graphql_client::Response<Q::ResponseData> = reply.response;
 
         if let Some(errs) = res.errors {
-            if errs.len() > 0 {
+            if !errs.is_empty() {
                 return Err(GlimeshError::GraphqlErrors(errs).into());
             }
         }
 
-        let data = res.data.ok_or_else(|| GlimeshError::NoData)?;
+        let data = res.data.ok_or(GlimeshError::NoData)?;
         Ok(data)
     }
 }

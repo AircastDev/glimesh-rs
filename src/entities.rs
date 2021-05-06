@@ -5,7 +5,7 @@ pub mod glimesh_date {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &'static str = "%FT%T";
+    const FORMAT: &str = "%FT%T";
 
     /// Serialize date in Glimesh format
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
