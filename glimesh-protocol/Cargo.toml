@@ -1,0 +1,24 @@
+[package]
+name = "glimesh-protocol"
+version = "0.6.0"
+authors = ["James Birtles <jamesb@airca.st>"]
+edition = "2018"
+
+[features]
+default = ["date", "socket"]
+date = ["chrono"]
+socket = ["serde_json", "bimap", "serde_tuple", "uuid", "snafu"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+
+# feature = "date"
+chrono = { version = "0.4", optional = true, features = ["serde"] }
+
+# feature = "socket"
+serde_json = { version = "1", optional = true }
+bimap = { version = "0.6", optional = true }
+serde_tuple = { version = "0.5", optional = true }
+uuid = { version = "0.8", optional = true, features = ["v4", "serde"] }
+snafu = { version = "0.6", optional = true }

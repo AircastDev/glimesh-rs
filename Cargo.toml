@@ -1,54 +1,5 @@
-[package]
-name = "glimesh"
-description = "Client for performing queries, mutations, and subscriptions against the Glimesh API."
-version = "0.5.3"
-authors = ["James Birtles <jamesb@airca.st>"]
-edition = "2018"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-keywords = ["glimesh", "graphql"]
-categories = ["api-bindings", "asynchronous", "web-programming::websocket", "web-programming::http-client"]
-repository = "https://github.com/AircastDev/glimesh-rs"
-
-[features]
-default = ["http", "websocket"]
-http = []
-websocket = [
-    "async-tungstenite",
-    "serde_urlencoded",
-    "tokio/io-util",
-    "tokio/rt-multi-thread",
-    "tokio/time",
-    "tokio/macros",
-    "tokio-util",
-    "serde_tuple",
-    "uuid",
-    "serde_json",
-    "tokio-stream",
-    "backoff"
+[workspace]
+members = [
+    "glimesh",
+    "glimesh-protocol"
 ]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-thiserror = "1.0"
-graphql_client = "0.9"
-serde = "1.0"
-futures = "0.3"
-async-trait = "0.1.43"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-anyhow = "1.0"
-chrono = "0.4"
-tokio = { version = "1.4", default-features = false, features = ["sync"] }
-tracing = "0.1"
-async-tungstenite = { version = "0.13", optional = true, features = ["tokio-runtime", "tokio-rustls"] }
-serde_urlencoded = { version = "0.7", optional = true }
-tokio-util = { version = "0.6", optional = true }
-serde_tuple = { version = "0.5", optional = true }
-uuid = { version = "0.8", optional = true, features = ["serde", "v4"] }
-serde_json = { version = "1.0", optional = true }
-tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
-backoff = { version = "0.3", optional = true, features = ["tokio"] }
-
-[dev-dependencies]
-tracing-subscriber = "0.2"

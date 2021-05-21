@@ -134,7 +134,7 @@ pub struct AccessToken {
     pub refresh_token: Option<String>,
 
     /// Time the token was created
-    #[serde(with = "crate::entities::glimesh_date")]
+    #[serde(with = "glimesh_protocol::date")]
     pub created_at: DateTime<Utc>,
 
     /// Seconds after the created_at time when the token expires.
