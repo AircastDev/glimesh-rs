@@ -104,7 +104,7 @@ struct PendingRequest<T> {
     request: Request<T>,
 }
 
-pub struct GlimeshSession<T>
+pub struct SocketSession<T>
 where
     T: Clone + Hash + Eq,
 {
@@ -115,7 +115,7 @@ where
     joined: bool,
 }
 
-impl<T> GlimeshSession<T>
+impl<T> SocketSession<T>
 where
     T: Clone + Hash + Eq,
 {
@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<T> Default for GlimeshSession<T>
+impl<T> Default for SocketSession<T>
 where
     T: Clone + Hash + Eq,
 {
