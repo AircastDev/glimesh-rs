@@ -1,8 +1,13 @@
 [package]
 name = "glimesh-protocol"
+description = "Low level structures for interfacing with the glimesh api."
 version = "0.6.0-beta.0"
 authors = ["James Birtles <jamesb@airca.st>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+keywords = ["glimesh"]
+categories = ["api-bindings"]
+repository = "https://github.com/AircastDev/glimesh-rs"
 
 [features]
 default = ["date", "socket"]
