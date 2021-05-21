@@ -1,6 +1,6 @@
 [package]
 name = "glimesh-protocol"
-version = "0.6.0"
+version = "0.6.0-beta.0"
 authors = ["James Birtles <jamesb@airca.st>"]
 edition = "2018"
 
