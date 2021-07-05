@@ -41,7 +41,7 @@ anyhow = "1.0"
 chrono = "0.4"
 tokio = { version = "1.4", default-features = false, features = ["sync"] }
 tracing = "0.1"
-async-tungstenite = { version = "0.13", optional = true, features = ["tokio-runtime", "tokio-rustls"] }
+async-tungstenite = { version = "0.14", optional = true, features = ["tokio-runtime", "tokio-rustls"] }
 serde_urlencoded = { version = "0.7", optional = true }
 tokio-util = { version = "0.6", optional = true }
 serde_tuple = { version = "0.5", optional = true }
