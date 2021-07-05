@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 (2021-07-05)
 
 ### Added
 
@@ -12,6 +12,7 @@
 ### Breaking Changes
 
 -   The glimesh_date submodule has been moved to the new glimesh_protocol package as `glimesh_protocol::date`
+-   Updated `graphql_client` to 0.10
 
 ## v0.5.3 (2021-04-22)
 
