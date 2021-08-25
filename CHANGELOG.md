@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.1 (2021-08-25)
 
 ### Added
 
