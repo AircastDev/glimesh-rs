@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Added `client_credentials_with_scopes` method to `Auth` to allow specifying scopes for the token.
+
 ## v0.6.0 (2021-07-05)
 
 ### Added

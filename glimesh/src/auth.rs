@@ -102,10 +102,27 @@ impl Auth {
     /// This allows you to log in to the api as the account that created the developer application.
     ///
     /// # Panics
-    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load the system configuration.
+    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load
+    /// the system configuration.
     pub fn client_credentials(
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
+    ) -> Self {
+        Self::client_credentials_with_scopes(client_id, client_secret, vec![])
+    }
+
+    /// Use Bearer authentication via the client_credentials flow, specifying the scopes for the
+    /// token.
+    ///
+    /// This allows you to log in to the api as the account that created the developer application.
+    ///
+    /// # Panics
+    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load
+    /// the system configuration.
+    pub fn client_credentials_with_scopes(
+        client_id: impl Into<String>,
+        client_secret: impl Into<String>,
+        scopes: Vec<String>,
     ) -> Self {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -118,6 +135,7 @@ impl Auth {
                 client_secret: client_secret.into(),
                 redirect_uri: None,
             },
+            scopes,
             access_token: Default::default(),
             http,
         })
@@ -231,6 +249,7 @@ impl RefreshableAccessToken {
 pub struct ClientCredentials {
     client: ClientConfig,
     access_token: Arc<RwLock<Option<AccessToken>>>,
+    scopes: Vec<String>,
     http: reqwest::Client,
 }
 
@@ -244,6 +263,7 @@ impl ClientCredentials {
                 ("grant_type", "client_credentials"),
                 ("client_id", &self.client.client_id),
                 ("client_secret", &self.client.client_secret),
+                ("scope", &self.scopes.join(" ")),
             ])
             .send()
             .await
