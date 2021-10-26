@@ -16,6 +16,7 @@ struct Config {
     user_agent: String,
     timeout: Duration,
     api_url: String,
+    auth: Option<Auth>,
 }
 
 impl Default for Config {
@@ -23,7 +24,8 @@ impl Default for Config {
         Config {
             user_agent: format!("Glimesh Rust / {}", env!("CARGO_PKG_VERSION")),
             timeout: Duration::from_secs(30),
-            api_url: String::from("https://glimesh.tv/api"),
+            api_url: String::from("https://glimesh.tv/api/graph"),
+            auth: None,
         }
     }
 }
@@ -34,26 +36,30 @@ impl Default for Config {
 /// ```rust
 /// let connection = Connection::builder()
 ///     .user_agent("My App / 0.1.0")
-///     .build();
+///     .finish();
 /// ```
 #[derive(Debug, Default)]
 pub struct ConnectionBuilder {
     config: Config,
+    http: Option<reqwest::Client>,
 }
 
 impl ConnectionBuilder {
-    /// Build the http connection from the set options.
+    /// Finish building the http connection from the set options.
     ///
     /// # Panics
-    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load the system configuration.
-    pub fn build(self, auth: Auth) -> Connection {
+    /// This function panics if (when an http client hasn't already been provided) the TLS backend
+    /// cannot be initialized, or the resolver cannot load the system configuration.
+    pub fn finish(self) -> Connection {
         Connection {
-            http: reqwest::Client::builder()
-                .user_agent(self.config.user_agent)
-                .timeout(self.config.timeout)
-                .build()
-                .expect("failed to create http client"),
-            auth: Arc::new(auth),
+            http: self.http.unwrap_or_else(move || {
+                reqwest::Client::builder()
+                    .user_agent(self.config.user_agent)
+                    .timeout(self.config.timeout)
+                    .build()
+                    .expect("failed to create http client")
+            }),
+            auth: self.config.auth.map(Arc::new),
             api_url: Arc::new(self.config.api_url),
         }
     }
@@ -61,6 +67,8 @@ impl ConnectionBuilder {
     /// Set the user agent the http client will identify itself as.
     ///
     /// This defaults to `Glimesh Rust / x.x.x` where `x.x.x` is the version of this package.
+    ///
+    /// This has no effect if a custom http client is passed in
     pub fn user_agent(mut self, value: impl Into<String>) -> Self {
         self.config.user_agent = value.into();
         self
@@ -69,17 +77,31 @@ impl ConnectionBuilder {
     /// Set the timeout for requests made to glimesh.
     ///
     /// The default is 30 seconds
+    ///
+    /// This has no effect if a custom http client is passed in
     pub fn timeout(mut self, value: Duration) -> Self {
         self.config.timeout = value;
         self
     }
 
     /// Set the base api url used for request.
-    /// Useful if running Glimesh locally for example.
+    /// Useful if running Glimesh locally, or using the old api for example.
     ///
-    /// Defaults to `https://glimesh.tv/api`
+    /// Defaults to `https://glimesh.tv/api/graph`
     pub fn api_url(mut self, value: impl Into<String>) -> Self {
         self.config.api_url = value.into();
+        self
+    }
+
+    /// Set the auth method used in requests.
+    pub fn auth(mut self, auth: Auth) -> Self {
+        self.config.auth = Some(auth);
+        self
+    }
+
+    /// Use an existing http client.
+    pub fn http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = Some(http);
         self
     }
 }
@@ -88,7 +110,7 @@ impl ConnectionBuilder {
 #[derive(Debug, Clone)]
 pub struct Connection {
     http: reqwest::Client,
-    auth: Arc<Auth>,
+    auth: Option<Arc<Auth>>,
     api_url: Arc<String>,
 }
 
@@ -100,11 +122,11 @@ impl Connection {
 
     /// Create a connection with the default options.
     pub fn new(auth: Auth) -> Self {
-        ConnectionBuilder::default().build(auth)
+        ConnectionBuilder::default().auth(auth).finish()
     }
 
     /// Create a client with reference to this connection
-    pub fn as_client(&self) -> Client<&Self, HttpConnectionError> {
+    pub fn as_client(&self) -> Client<&Self> {
         Client::new(self)
     }
 
@@ -116,6 +138,15 @@ impl Connection {
     /// Convert this connection into a client
     pub fn into_client(self) -> HttpClient {
         Client::new(self)
+    }
+
+    /// Create a copy of this connection with a difference auth method.
+    pub fn clone_with_auth(&self, auth: Auth) -> Self {
+        Self {
+            api_url: self.api_url.clone(),
+            http: self.http.clone(),
+            auth: Some(Arc::new(auth)),
+        }
     }
 
     async fn request<Q>(
@@ -155,19 +186,20 @@ impl Connection {
     }
 
     async fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, HttpConnectionError> {
-        match self.auth.as_ref() {
-            Auth::ClientId(client_id) => {
+        match self.auth.as_ref().map(|a| a.as_ref()) {
+            Some(Auth::ClientId(client_id)) => {
                 Ok(req.header(header::AUTHORIZATION, format!("Client-ID {}", client_id)))
             }
-            Auth::AccessToken(access_token) => Ok(req.bearer_auth(access_token)),
-            Auth::RefreshableAccessToken(token) => {
+            Some(Auth::AccessToken(access_token)) => Ok(req.bearer_auth(access_token)),
+            Some(Auth::RefreshableAccessToken(token)) => {
                 let tokens = token.access_token().await?;
                 Ok(req.bearer_auth(tokens.access_token))
             }
-            Auth::ClientCredentials(client_credentials) => {
+            Some(Auth::ClientCredentials(client_credentials)) => {
                 let tokens = client_credentials.access_token().await?;
                 Ok(req.bearer_auth(tokens.access_token))
             }
+            None => Ok(req),
         }
     }
 }
@@ -199,4 +231,4 @@ impl MutationConn for Connection {
 }
 
 /// Type alias for a http backed client
-pub type HttpClient = Client<Connection, HttpConnectionError>;
+pub type HttpClient = Client<Connection>;

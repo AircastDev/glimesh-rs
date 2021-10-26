@@ -75,8 +75,10 @@ mod client;
 mod conn;
 mod entities;
 mod error;
+mod subscription;
 
 pub use auth::{AccessToken, Auth};
 pub use client::Client;
 pub use conn::*;
 pub use error::*;
+pub use subscription::*;

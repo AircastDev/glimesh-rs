@@ -1,4 +1,4 @@
-use futures::stream::BoxStream;
+use crate::subscription::Subscription;
 use graphql_client::GraphQLQuery;
 
 #[cfg(feature = "http")]
@@ -62,10 +62,10 @@ pub trait SubscriptionConn {
     /// This function may error if there was a problem with the underlying connection such as
     /// a dns resolution error, or the websocket is disconnected, or if the api returned an error
     /// or the api response failed to decode.
-    async fn subscribe<'a, Q>(
+    async fn subscribe<Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<BoxStream<'a, Q::ResponseData>, Self::Error>
+    ) -> Result<Subscription<Q::ResponseData>, Self::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync;

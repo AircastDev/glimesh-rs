@@ -1,7 +1,9 @@
-use crate::conn::{MutationConn, QueryConn, SubscriptionConn};
-use futures::stream::BoxStream;
+use crate::{
+    conn::{MutationConn, QueryConn, SubscriptionConn},
+    subscription::Subscription,
+};
 use graphql_client::GraphQLQuery;
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 /// Glimesh client.
 /// The client is generic over its connection/transport, meaning it can be used with http
@@ -9,18 +11,14 @@ use std::{fmt::Debug, marker::PhantomData};
 ///
 /// To create a client you first create the underlying connection/transport,
 /// such as [`crate::http::Connection`].
-pub struct Client<T, E> {
+pub struct Client<T> {
     conn: T,
-    _err_type: PhantomData<E>,
 }
 
-impl<T, E> Client<T, E> {
+impl<T> Client<T> {
     /// Create a new client from a connection. Prefer calling `into_client` on the connection itself.
     pub fn new(conn: T) -> Self {
-        Self {
-            conn,
-            _err_type: PhantomData,
-        }
+        Self { conn }
     }
 
     /// Turn this client back into its underlying connection
@@ -29,30 +27,29 @@ impl<T, E> Client<T, E> {
     }
 }
 
-impl<T: Clone, E> Clone for Client<T, E> {
+impl<T: Clone> Clone for Client<T> {
     fn clone(&self) -> Self {
         Self {
             conn: self.conn.clone(),
-            _err_type: PhantomData,
         }
     }
 }
 
-impl<T: Debug, E> Debug for Client<T, E> {
+impl<T: Debug> Debug for Client<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Client").field("conn", &self.conn).finish()
     }
 }
 
-impl<T, E> Client<T, E>
+impl<T> Client<T>
 where
-    T: QueryConn<Error = E>,
+    T: QueryConn,
 {
     /// Perform a graphql query using the underlying connection.
     ///
     /// # Errors
     /// See [`QueryConn::query`] for error information
-    pub async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, E>
+    pub async fn query<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, T::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -61,15 +58,15 @@ where
     }
 }
 
-impl<T, E> Client<T, E>
+impl<T> Client<T>
 where
-    T: MutationConn<Error = E>,
+    T: MutationConn,
 {
     /// Perform a graphql mutation using the underlying connection
     ///
     /// # Errors
     /// See [`MutationConn::mutate`] for error information
-    pub async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, E>
+    pub async fn mutate<Q>(&self, variables: Q::Variables) -> Result<Q::ResponseData, T::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,
@@ -78,9 +75,9 @@ where
     }
 }
 
-impl<T, E> Client<T, E>
+impl<T> Client<T>
 where
-    T: SubscriptionConn<Error = E>,
+    T: SubscriptionConn,
 {
     /// Subscribe to a graphql subcription using the underlying connection.
     ///
@@ -89,7 +86,7 @@ where
     pub async fn subscribe<'a, Q>(
         &self,
         variables: Q::Variables,
-    ) -> Result<BoxStream<'a, Q::ResponseData>, E>
+    ) -> Result<Subscription<Q::ResponseData>, T::Error>
     where
         Q: GraphQLQuery,
         Q::Variables: Send + Sync,

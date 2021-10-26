@@ -4,13 +4,13 @@ use crate::{
         DocumentSubscribeResponse, Empty, EventSubscription, PhxReply, ReceivePhoenixMessage,
         SendPhoenixMessage,
     },
-    Auth, WebsocketConnectionError,
+    Auth, Subscription, WebsocketConnectionError,
 };
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
 use backoff::{backoff::Backoff, ExponentialBackoff};
-use futures::{future::BoxFuture, stream::BoxStream, FutureExt, SinkExt, Stream};
+use futures::{future::BoxFuture, FutureExt, SinkExt, Stream};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{collections::HashMap, fmt::Debug, time::Duration};
 use tokio::{
     select,
@@ -26,10 +26,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
-type SubscriptionPair = (String, SubscriptionRef);
+#[derive(Debug)]
+enum SubOp {
+    AddSubscription(String, SubscriptionRef),
+    RemoveSubscription(String),
+}
+
 type CloseState = (
     mpsc::Receiver<Message>,
-    mpsc::Receiver<(String, SubscriptionRef)>,
+    mpsc::UnboundedReceiver<SubOp>,
     HashMap<String, SubscriptionRef>,
 );
 
@@ -43,9 +48,9 @@ pub(super) struct Socket {
         broadcast::Receiver<ReceivePhoenixMessage<Value>>,
     ),
     subscriptions: Option<HashMap<String, SubscriptionRef>>,
-    new_subscriptions: (
-        mpsc::Sender<SubscriptionPair>,
-        Option<mpsc::Receiver<SubscriptionPair>>,
+    sub_ops: (
+        mpsc::UnboundedSender<SubOp>,
+        Option<mpsc::UnboundedReceiver<SubOp>>,
     ),
     cancellation_token: CancellationToken,
     handle: Option<BoxFuture<'static, Result<CloseState, WebsocketConnectionError>>>,
@@ -66,8 +71,7 @@ impl Socket {
         let (outgoing_messages_sender, outgoing_messages_receiver) =
             mpsc::channel(config.outgoing_capacity);
         let incoming_messages = broadcast::channel(config.incoming_capacity);
-        let (new_subscriptions_sender, new_subscriptions_receiver) =
-            mpsc::channel(config.incoming_capacity);
+        let (sub_ops_sender, sub_ops_receiver) = mpsc::unbounded_channel();
 
         Self {
             auth,
@@ -76,7 +80,7 @@ impl Socket {
             outgoing_messages: (outgoing_messages_sender, Some(outgoing_messages_receiver)),
             incoming_messages,
             subscriptions: Some(Default::default()),
-            new_subscriptions: (new_subscriptions_sender, Some(new_subscriptions_receiver)),
+            sub_ops: (sub_ops_sender, Some(sub_ops_receiver)),
             cancellation_token: CancellationToken::new(),
             handle: None,
         }
@@ -87,7 +91,7 @@ impl Socket {
             join_ref: self.join_ref,
             outgoing_messages: self.outgoing_messages.0.clone(),
             incoming_messages: self.incoming_messages.0.clone(),
-            new_subscriptions: self.new_subscriptions.0.clone(),
+            sub_ops: self.sub_ops.0.clone(),
             request_timeout: self.config.request_timeout,
             cancellation_token: self.cancellation_token.clone(),
         }
@@ -256,8 +260,8 @@ impl Socket {
 
         let subscriptions_handle = {
             let socket_client = self.client();
-            let mut new_subscriptions_receiver = self
-                .new_subscriptions
+            let mut sub_ops_receiver = self
+                .sub_ops
                 .1
                 .take()
                 .ok_or(WebsocketConnectionError::AlreadyConnected)?;
@@ -325,10 +329,24 @@ impl Socket {
                                 tracing::trace!("received cancellation signal");
                                 break;
                             }
-                            sub = new_subscriptions_receiver.recv() => {
+                            sub = sub_ops_receiver.recv() => {
                                 match sub {
-                                    Some((sub_id, sub)) => {
+                                    Some(SubOp::AddSubscription(sub_id, sub)) => {
                                         subscriptions.insert(sub_id, sub);
+                                    }
+                                    Some(SubOp::RemoveSubscription(sub_id)) => {
+                                        subscriptions.remove(&sub_id);
+                                        let socket_client = socket_client.clone();
+                                        task::spawn(async move {
+                                            let payload = json!({ "subscriptionId": sub_id });
+                                            if let Err(err) = socket_client.send_message(
+                                                "__absinthe__:control".into(),
+                                                "unsubscribe".into(),
+                                                payload
+                                            ).await {
+                                                tracing::error!(?err, "failed to send unsubscribe request");
+                                            }
+                                        });
                                     }
                                     None => {
                                         tracing::trace!("all senders were dropped");
@@ -364,7 +382,7 @@ impl Socket {
                     }
                 }
 
-                (new_subscriptions_receiver, subscriptions)
+                (sub_ops_receiver, subscriptions)
             })
             .instrument(tracing::trace_span!("subscriptions"))
         };
@@ -378,11 +396,11 @@ impl Socket {
                 let outgoing_messages_receiver = outgoing_messages_handle
                     .await
                     .map_err(anyhow::Error::from)?;
-                let (new_subscriptions_receiver, subscriptions) =
+                let (sub_ops_receiver, subscriptions) =
                     subscriptions_handle.await.map_err(anyhow::Error::from)?;
                 Ok::<_, WebsocketConnectionError>((
                     outgoing_messages_receiver,
-                    new_subscriptions_receiver,
+                    sub_ops_receiver,
                     subscriptions,
                 ))
             }
@@ -436,10 +454,9 @@ impl Socket {
             .handle
             .take()
             .ok_or(WebsocketConnectionError::SocketClosed)?;
-        let (outgoing_messages_receiver, new_subscriptions_receiver, subscriptions) =
-            handle.await?;
+        let (outgoing_messages_receiver, sub_ops_receiver, subscriptions) = handle.await?;
         self.outgoing_messages.1.replace(outgoing_messages_receiver);
-        self.new_subscriptions.1.replace(new_subscriptions_receiver);
+        self.sub_ops.1.replace(sub_ops_receiver);
         self.subscriptions.replace(subscriptions);
         Ok(())
     }
@@ -456,21 +473,20 @@ pub(super) struct SocketClient {
     join_ref: Uuid,
     outgoing_messages: mpsc::Sender<Message>,
     incoming_messages: broadcast::Sender<ReceivePhoenixMessage<Value>>,
-    new_subscriptions: mpsc::Sender<(String, SubscriptionRef)>,
+    sub_ops: mpsc::UnboundedSender<SubOp>,
     request_timeout: Duration,
     cancellation_token: CancellationToken,
 }
 
 impl SocketClient {
-    pub async fn request<T, U>(
+    pub async fn send_message<T>(
         &self,
         topic: String,
         event: String,
         payload: T,
-    ) -> Result<PhxReply<U>, WebsocketConnectionError>
+    ) -> Result<Uuid, WebsocketConnectionError>
     where
         T: Serialize,
-        U: DeserializeOwned,
     {
         let msg_ref = Uuid::new_v4();
         let msg = serde_json::to_string(&SendPhoenixMessage {
@@ -481,7 +497,20 @@ impl SocketClient {
             payload,
         })?;
         self.outgoing_messages.send(msg.into()).await?;
+        Ok(msg_ref)
+    }
 
+    pub async fn request<T, U>(
+        &self,
+        topic: String,
+        event: String,
+        payload: T,
+    ) -> Result<PhxReply<U>, WebsocketConnectionError>
+    where
+        T: Serialize,
+        U: DeserializeOwned,
+    {
+        let msg_ref = self.send_message(topic, event, payload).await?;
         timeout(
             self.request_timeout,
             self.filter_messages::<PhxReply<U>, _>(move |msg| msg.msg_ref == Some(msg_ref))
@@ -492,10 +521,10 @@ impl SocketClient {
         .ok_or(WebsocketConnectionError::SocketClosed)
     }
 
-    pub async fn subscribe<'a, T, U>(
+    pub async fn subscribe<T, U>(
         &self,
         payload: T,
-    ) -> Result<BoxStream<'a, U>, WebsocketConnectionError>
+    ) -> Result<Subscription<U>, WebsocketConnectionError>
     where
         T: Serialize,
         U: DeserializeOwned,
@@ -508,13 +537,21 @@ impl SocketClient {
         let (sender, receiver) = mpsc::channel(10);
 
         let sub_id = subscription.response.subscription_id;
-        self.new_subscriptions
-            .send((sub_id, SubscriptionRef { payload, sender }))
-            .await
+        self.sub_ops
+            .send(SubOp::AddSubscription(
+                sub_id.clone(),
+                SubscriptionRef { payload, sender },
+            ))
             .map_err(anyhow::Error::from)?;
 
-        Ok(Box::pin(
+        let this = self.clone();
+        Ok(Subscription::wrap(
             ReceiverStream::new(receiver).filter_map(|res| serde_json::from_value(res.data?).ok()),
+            Some(move || {
+                if let Err(err) = this.sub_ops.send(SubOp::RemoveSubscription(sub_id)) {
+                    tracing::error!(?err, "failed to notify unsubscribe");
+                }
+            }),
         ))
     }
 

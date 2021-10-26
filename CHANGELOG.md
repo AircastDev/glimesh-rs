@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.7.0 (2021-10-26)
+
+### Added
+
+-   Added http_client method to the http connection builder to allow reuse of http clients.
+-   Added auth method to the http connection builder.
+-   Added clone_with_auth method to http connection to allow reusing shared data whilst specifying a
+    different auth method.
+-   Added ability to unsubscribe from subscriptions.
+-   Subscriptions will now be automatically unsubscribed from in the background when dropped.
+
+### Breaking Changes
+
+-   Default api url for the http connection changed to the new api url
+    `https://glimesh.tv/api/graph`. You can still use the old api url by using the http connection
+    builder and calling `.api_url("https://glimesh.tv/api")` on it. Note that some queries may be
+    different on the new url, so you should redownload the schema and check your queries still work.
+-   Removed `.build(auth)` in favour of `.auth(auth).finish()` for
+    `glimesh::http::ConnectionBuilder` as auth is now optional (although in practise the api will
+    fail without some form of auth).
+-   Removed error type from `Client` as it was redundant information.
+-   Crate now uses rust edition 2021
+-   The `SubscriptionConn` trait (and by extension the subscribe method on the client) now returns a
+    `glimesh::Subscription` instead of a BoxStream, although it still implements Stream with the
+    same Item. This allows for unsubscribing via `Subscription::unsubscribe` or when dropped. The
+    lifetime on `SubscriptionConn` has also been removed as a result.
+
 ## v0.6.1 (2021-08-25)
 
 ### Added

@@ -54,7 +54,7 @@ async fn main() -> Result<(), glimesh::WebsocketConnectionError> {
             let chat_message = msg.chat_message.unwrap();
             tracing::info!(
                 "[{}]: {}",
-                chat_message.user.displayname.unwrap(),
+                chat_message.user.displayname,
                 chat_message.message.unwrap()
             );
         }
