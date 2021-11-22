@@ -1,7 +1,7 @@
 [package]
 name = "glimesh-protocol"
 description = "Low level structures for interfacing with the glimesh api."
-version = "0.7.0"
+version = "0.8.0"
 authors = ["James Birtles <jamesb@airca.st>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"

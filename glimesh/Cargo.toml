@@ -41,7 +41,7 @@ anyhow = "1.0"
 chrono = "0.4"
 tokio = { version = "1.4", default-features = false, features = ["sync"] }
 tracing = "0.1"
-glimesh-protocol = { version = "0.7", default-features = false, features = ["date"], path = "../glimesh-protocol" }
+glimesh-protocol = { version = "0.8", default-features = false, features = ["date"], path = "../glimesh-protocol" }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # feature = "websocket"
