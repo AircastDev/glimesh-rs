@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+-   Added `HybridConnection` that allows you to combine two connections into one, using one as the
+    subscriptions connection, and the other as the query & mutations connection. This allows you to
+    have a single client that, for example, supports subscriptions and the new glimesh api at the
+    same time (as the websocket based api query currently only supports the old glimesh api)
+-   Auth is now `Clone`
+
+### Breaking Changes
+
+-   `Auth::refreshable_access_token` now returns `impl Stream<Item = AccessToken>` instead of a
+    tokio watch receiver.
+
 ## 0.7.0 (2021-10-26)
 
 ### Added

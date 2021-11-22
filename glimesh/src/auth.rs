@@ -1,15 +1,17 @@
 use crate::AuthError;
 use chrono::{DateTime, Duration, Utc};
+use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{mpsc, RwLock};
+use tokio_stream::wrappers::ReceiverStream;
 
 const EXPIRY_BUFFER: i64 = 5 * 60;
 
 /// Authentication method.
 /// The Glimesh API requires an authentication method to be used.
 /// The most basic is the ClientId method, which gives you read only access to the api.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Auth {
     /// Use Client-ID authentication.
     /// When using this method, you can only 'read' from the API.
@@ -44,11 +46,11 @@ impl Auth {
         Self::AccessToken(access_token.into())
     }
 
-    /// Use Bearer authentication.
-    /// This will use the provided refresh token to refresh the access token when/if it expires.
+    /// Use Bearer authentication. This will use the provided refresh token to refresh the access
+    /// token when/if it expires.
     ///
-    /// You can listen for updates to the token using the [`tokio::sync::watch::Receiver`] returned as the second
-    /// part of the tuple.
+    /// You can listen for updates to the token using the Stream returned as the second part of the
+    /// tuple.
     ///
     /// ## Example
     ///
@@ -61,26 +63,27 @@ impl Auth {
     /// );
     ///
     /// tokio::spawn(async move {
-    ///     while token_receiver.changed().await.is_ok() {
-    ///         println!("new token = {:#?}", *token_receiver.borrow());
+    ///     while let Some(token) = token_receiver.next().await {
+    ///         println!("new token = {:#?}", token);
     ///     }
     /// });
     /// ```
     ///
     /// # Panics
-    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load the system configuration.
+    /// This function panics if the TLS backend cannot be initialized, or the resolver cannot load
+    /// the system configuration.
     pub fn refreshable_access_token(
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
         redirect_uri: impl Into<String>,
         access_token: AccessToken,
-    ) -> (Self, watch::Receiver<AccessToken>) {
+    ) -> (Self, impl Stream<Item = AccessToken>) {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("failed to create http client");
 
-        let (token_sender, token_receiver) = watch::channel(access_token.clone());
+        let (token_sender, token_receiver) = mpsc::channel(1);
 
         (
             Self::RefreshableAccessToken(RefreshableAccessToken {
@@ -93,7 +96,7 @@ impl Auth {
                 http,
                 token_sender,
             }),
-            token_receiver,
+            ReceiverStream::new(token_receiver),
         )
     }
 
@@ -177,12 +180,12 @@ pub struct ClientConfig {
     pub redirect_uri: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RefreshableAccessToken {
     client: ClientConfig,
     access_token: Arc<RwLock<AccessToken>>,
     http: reqwest::Client,
-    token_sender: watch::Sender<AccessToken>,
+    token_sender: mpsc::Sender<AccessToken>,
 }
 
 impl RefreshableAccessToken {
@@ -226,7 +229,7 @@ impl RefreshableAccessToken {
             *access_token = new_token.clone();
         }
 
-        if let Err(err) = self.token_sender.send(new_token.clone()) {
+        if let Err(err) = self.token_sender.send(new_token.clone()).await {
             tracing::warn!(?err, "failed to send refresh access token to receiver");
         }
 

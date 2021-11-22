@@ -7,6 +7,8 @@ pub mod http;
 #[cfg(feature = "websocket")]
 pub mod ws;
 
+pub mod hybrid;
+
 /// Connections that implement this support graphql queries.
 #[async_trait]
 pub trait QueryConn {
