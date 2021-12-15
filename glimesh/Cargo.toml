@@ -51,7 +51,7 @@ tokio-util = { version = "0.6", optional = true }
 serde_tuple = { version = "0.5", optional = true }
 uuid = { version = "0.8", optional = true, features = ["serde", "v4"] }
 serde_json = { version = "1.0", optional = true }
-backoff = { version = "0.3", optional = true, features = ["tokio"] }
+backoff = { version = "0.4", optional = true, features = ["tokio"] }
 
 [dev-dependencies]
 tracing-subscriber = "0.2"
