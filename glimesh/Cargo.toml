@@ -45,7 +45,7 @@ glimesh-protocol = { version = "0.8", default-features = false, features = ["dat
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # feature = "websocket"
-async-tungstenite = { version = "0.16", optional = true, features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
+async-tungstenite = { version = "0.18", optional = true, features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
 serde_urlencoded = { version = "0.7", optional = true }
 tokio-util = { version = "0.6", optional = true }
 serde_tuple = { version = "0.5", optional = true }
