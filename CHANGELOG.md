@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Breaking Changes
+
+-   Updated `uuid` to `1.x`
+-   Updated `graphq_client` to `0.12`
+-   Updated `snafu` to `0.7`
+
 ## 0.8.0 (2021-11-22)
 
 ### Added

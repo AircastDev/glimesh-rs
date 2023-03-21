@@ -295,9 +295,9 @@ impl Socket {
                                 tracing::debug!(?err, ?sub, "failed to resubscribe");
 
                                 if cancellation_token.is_cancelled() {
-                                    Err(backoff::Error::Permanent(err))
+                                    Err(backoff::Error::permanent(err))
                                 } else {
-                                    Err(backoff::Error::Transient(err))
+                                    Err(backoff::Error::transient(err))
                                 }
                             }
                         }

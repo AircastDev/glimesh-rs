@@ -31,15 +31,15 @@ websocket = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "1.0"
-graphql_client = "0.10"
-serde = "1.0"
+thiserror = "1"
+graphql_client = "0.12"
+serde = "1"
 futures = "0.3"
 async-trait = "0.1.43"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-anyhow = "1.0"
+anyhow = "1"
 chrono = "0.4"
-tokio = { version = "1.4", default-features = false, features = ["sync"] }
+tokio = { version = "1", default-features = false, features = ["sync"] }
 tracing = "0.1"
 glimesh-protocol = { version = "0.8", default-features = false, features = ["date"], path = "../glimesh-protocol" }
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -47,11 +47,11 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 # feature = "websocket"
 async-tungstenite = { version = "0.16", optional = true, features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
 serde_urlencoded = { version = "0.7", optional = true }
-tokio-util = { version = "0.6", optional = true }
+tokio-util = { version = "0.7", optional = true }
 serde_tuple = { version = "0.5", optional = true }
-uuid = { version = "0.8", optional = true, features = ["serde", "v4"] }
-serde_json = { version = "1.0", optional = true }
-backoff = { version = "0.3", optional = true, features = ["tokio"] }
+uuid = { version = "1", optional = true, features = ["serde", "v4"] }
+serde_json = { version = "1", optional = true }
+backoff = { version = "0.4", optional = true, features = ["tokio"] }
 
 [dev-dependencies]
 tracing-subscriber = "0.2"

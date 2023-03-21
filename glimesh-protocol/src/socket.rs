@@ -20,8 +20,10 @@ struct SendPhoenixMessage<T: Serialize> {
 
 #[derive(Debug, Clone, Deserialize_tuple)]
 struct ReceivePhoenixMessage<T: DeserializeOwned> {
+    #[allow(unused)]
     join_ref: Option<Uuid>,
     msg_ref: Option<Uuid>,
+    #[allow(unused)]
     topic: String,
     event: ReceiveEvent,
     payload: T,
@@ -217,7 +219,7 @@ where
         msg: &str,
     ) -> Result<Vec<SessionResult<T>>, HandleMessageError> {
         let message: ReceivePhoenixMessage<Value> =
-            serde_json::from_str(msg).context(DeserializeError {})?;
+            serde_json::from_str(msg).context(DeserializeSnafu {})?;
 
         let results = match message.event {
             ReceiveEvent::PhxReply => match message.msg_ref {
@@ -238,7 +240,7 @@ where
                     }
                     Some(Request::Subscribe(reference)) => {
                         let reply: PhxReply<DocumentSubscribeResponse> =
-                            serde_json::from_value(message.payload).context(DeserializeError {})?;
+                            serde_json::from_value(message.payload).context(DeserializeSnafu {})?;
                         self.subscriptions
                             .insert(reply.response.subscription_id, reference);
                         vec![]
@@ -266,7 +268,7 @@ where
             }
             ReceiveEvent::SubscriptionData => {
                 let data: SubscriptionEvent =
-                    serde_json::from_value(message.payload).context(DeserializeError {})?;
+                    serde_json::from_value(message.payload).context(DeserializeSnafu {})?;
                 match self.subscriptions.get_by_left(&data.subscription_id) {
                     Some(reference) => {
                         vec![Event::Document(reference.clone(), data.result).into()]

@@ -15,6 +15,7 @@ pub(crate) mod ws {
 
     #[derive(Debug, Clone, Deserialize_tuple)]
     pub(crate) struct ReceivePhoenixMessage<T: DeserializeOwned> {
+        #[allow(unused)]
         pub(crate) join_ref: Option<Uuid>,
         pub(crate) msg_ref: Option<Uuid>,
         pub(crate) topic: String,
