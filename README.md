@@ -17,7 +17,7 @@ A wrapper around [graphql_client](https://github.com/graphql-rust/graphql-client
 
 ## Example
 
-More examples can be found in the `glimesh/examples/` directory.
+More examples can be found in the `examples/` directory.
 
 ```rust
 #[derive(GraphQLQuery)]
