@@ -7,6 +7,7 @@
 -   Updated `uuid` to `1.x`
 -   Updated `graphq_client` to `0.12`
 -   Updated `snafu` to `0.7`
+-   Updated `async-tungstenite` to `0.20`
 
 ## 0.8.0 (2021-11-22)
 
